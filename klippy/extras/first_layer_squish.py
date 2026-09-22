@@ -187,7 +187,8 @@ M109 S{extruder_temp}
         print_stats = self.printer.lookup_object("print_stats", None)
         if print_stats is None:
             return
-        print_state = print_stats.get_status(None).get("state", "standby")
+        eventtime = self.printer.get_reactor().monotonic()
+        print_state = print_stats.get_status(eventtime).get("state", "standby")
         if print_state in ("printing", "paused"):
             raise gcmd.error(
                 "First-layer squish calibration cannot start during a print")
@@ -227,7 +228,8 @@ M109 S{extruder_temp}
         try:
             self._run_template(self.start_template, settings)
             toolhead = self.printer.lookup_object("toolhead")
-            homed_axes = toolhead.get_status(None).get("homed_axes", "")
+            eventtime = self.printer.get_reactor().monotonic()
+            homed_axes = toolhead.get_status(eventtime).get("homed_axes", "")
             if not all(axis in homed_axes for axis in "xyz"):
                 raise gcmd.error(
                     "The start_gcode must home X, Y, and Z before calibration")

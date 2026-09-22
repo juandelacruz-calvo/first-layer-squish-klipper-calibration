@@ -59,5 +59,42 @@ class GeometryTests(unittest.TestCase):
         self.assertTrue(gcode.endswith("G1 Z2.2500 F600.0\nM400"))
 
 
+class _FakeReactor:
+    def monotonic(self):
+        return 123.456
+
+
+class _FakePrintStats:
+    def __init__(self):
+        self.eventtime = None
+
+    def get_status(self, eventtime):
+        self.eventtime = eventtime
+        return {"state": "standby"}
+
+
+class _FakePrinter:
+    def __init__(self, print_stats):
+        self.print_stats = print_stats
+        self.reactor = _FakeReactor()
+
+    def lookup_object(self, name, default=None):
+        if name == "print_stats":
+            return self.print_stats
+        return default
+
+    def get_reactor(self):
+        return self.reactor
+
+
+class StatusCompatibilityTests(unittest.TestCase):
+    def test_print_status_receives_a_real_eventtime(self):
+        print_stats = _FakePrintStats()
+        calibration = object.__new__(MODULE.FirstLayerSquish)
+        calibration.printer = _FakePrinter(print_stats)
+        calibration._validate_not_printing(None)
+        self.assertEqual(print_stats.eventtime, 123.456)
+
+
 if __name__ == "__main__":
     unittest.main()
