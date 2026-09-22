@@ -101,6 +101,7 @@ class FirstLayerSquish:
         self.gcode = self.printer.lookup_object("gcode")
         gcode_macro = self.printer.load_object(config, "gcode_macro")
         self.gcode_macro = gcode_macro
+        self.manual_probe = self.printer.load_object(config, "manual_probe")
 
         printer_config = config.getsection("printer")
         self.kinematics = printer_config.get("kinematics").lower()
@@ -143,6 +144,8 @@ class FirstLayerSquish:
         self.retract_speed = config.getfloat("retract_speed", 30., above=0.)
         self.z_hop = config.getfloat("z_hop", 2., minval=0.)
         self.max_adjustment = config.getfloat("max_adjustment", .5, above=0.)
+        self.ui_fine_step = config.getfloat("ui_fine_step", .01, above=0.)
+        self.ui_coarse_step = config.getfloat("ui_coarse_step", .05, above=0.)
         self.bed_temp = config.getfloat("bed_temp", 60., minval=0.)
         self.extruder_temp = config.getfloat("extruder_temp", 200., minval=0.)
         self.apply_method = config.getchoice(
@@ -168,6 +171,8 @@ M109 S{extruder_temp}
         self.adjustment = 0.
         self.initial_offset = 0.
         self.state_saved = False
+        self.ui_active = False
+        self.past_adjustments = []
         self.settings = {}
 
         commands = (
@@ -201,6 +206,57 @@ M109 S{extruder_temp}
     def _require_active(self, gcmd):
         if self.state == "inactive":
             raise gcmd.error("No first-layer squish calibration is active")
+
+    def _activate_manual_probe_ui(self):
+        try:
+            self.gcode.register_command("ACCEPT", "dummy")
+        except self.printer.config_error:
+            raise self.gcode.error(
+                "Another manual Z calibration is active; use ABORT first")
+        self.gcode.register_command("ACCEPT", None)
+        commands = (
+            ("ACCEPT", self.cmd_ui_accept,
+             "Print next squish square or accept the final offset"),
+            ("NEXT", self.cmd_ui_accept,
+             "Print the next first-layer squish square"),
+            ("ABORT", self.cmd_abort,
+             "Abort first-layer squish calibration"),
+            ("TESTZ", self.cmd_testz,
+             "Adjust Z for first-layer squish calibration"),
+        )
+        registered = []
+        try:
+            for name, callback, description in commands:
+                self.gcode.register_command(
+                    name, callback, desc=description)
+                registered.append(name)
+            self.ui_active = True
+            self._update_manual_probe_status()
+        except Exception:
+            for name in registered:
+                self.gcode.register_command(name, None)
+            self.ui_active = False
+            raise
+
+    def _deactivate_manual_probe_ui(self):
+        if not self.ui_active:
+            return
+        self.manual_probe.reset_status()
+        for command in ("ACCEPT", "NEXT", "ABORT", "TESTZ"):
+            self.gcode.register_command(command, None)
+        self.ui_active = False
+
+    def _update_manual_probe_status(self):
+        lower_values = [value for value in self.past_adjustments
+                        if value < self.adjustment]
+        upper_values = [value for value in self.past_adjustments
+                        if value > self.adjustment]
+        self.manual_probe.status = {
+            "is_active": True,
+            "z_position": self.adjustment,
+            "z_position_lower": max(lower_values) if lower_values else None,
+            "z_position_upper": min(upper_values) if upper_values else None,
+        }
 
     def _template_context(self, parameters):
         context = self.gcode_macro.create_template_context()
@@ -291,6 +347,7 @@ M109 S{extruder_temp}
                 "SAVE_GCODE_STATE NAME=%s" % (STATE_NAME,))
             self.state_saved = True
             self.state = "waiting"
+            self._activate_manual_probe_ui()
             self._print_next_square(gcmd)
         except Exception:
             if self.state_saved:
@@ -309,7 +366,17 @@ M109 S{extruder_temp}
         commands.append("G1 X%.4f Y%.4f E%.5f F%.1f" % (
             x_pos, y_pos, extrusion, self.print_speed * 60.))
 
-    def _square_gcode(self, center):
+    def _inspection_position(self, next_center):
+        if next_center is not None:
+            half_size = self.settings["size"] * .5
+            return (next_center[0] - half_size,
+                    next_center[1] - half_size)
+        x_min, x_max, y_min, y_max = self.bounds
+        park_x = (x_min + x_max) * .5
+        park_y = min(y_max, y_min + max(2., self.margin * .5))
+        return park_x, park_y
+
+    def _square_gcode(self, center, next_center=None):
         settings = self.settings
         half_size = settings["size"] * .5
         x0, x1 = center[0] - half_size, center[0] + half_size
@@ -351,31 +418,40 @@ M109 S{extruder_temp}
         if self.retract_length:
             commands.append("G1 E-%.5f F%.1f" % (
                 self.retract_length, self.retract_speed * 60.))
+        inspect_x, inspect_y = self._inspection_position(next_center)
         commands.extend((
-            "G1 Z%.4f F%.1f" % (safe_z, self.z_speed * 60.), "M400"))
+            "G1 Z%.4f F%.1f" % (safe_z, self.z_speed * 60.),
+            "G1 X%.4f Y%.4f F%.1f" % (
+                inspect_x, inspect_y, self.travel_speed * 60.),
+            "M400"))
         return "\n".join(commands)
 
     def _print_next_square(self, gcmd):
         if self.printed_count >= len(self.centers):
             raise gcmd.error("All first-layer squares have been printed")
         square_number = self.printed_count + 1
+        next_index = self.printed_count + 1
+        next_center = (self.centers[next_index]
+                       if next_index < len(self.centers) else None)
         self.state = "printing"
         self.gcode.run_script_from_command(
-            self._square_gcode(self.centers[self.printed_count]))
+            self._square_gcode(
+                self.centers[self.printed_count], next_center=next_center))
         self.samples.append({"square": square_number,
                              "adjustment": self.adjustment})
         self.printed_count = square_number
         self.state = ("complete" if self.printed_count == len(self.centers)
                       else "waiting")
+        self._update_manual_probe_status()
         if self.state == "complete":
             gcmd.respond_info(
-                "Square %d/%d printed at Z adjustment %+.3f. Select a "
-                "square if needed, then run SQUISH_ACCEPT or SQUISH_ABORT."
+                "Square %d/%d printed at Z adjustment %+.3f. Adjust Z if "
+                "needed, then press Accept to apply and save, or Abort."
                 % (square_number, len(self.centers), self.adjustment))
         else:
             gcmd.respond_info(
                 "Square %d/%d printed at Z adjustment %+.3f. Adjust Z, then "
-                "run SQUISH_NEXT." % (
+                "press Accept to print the next square." % (
                     square_number, len(self.centers), self.adjustment))
 
     def cmd_adjust(self, gcmd):
@@ -383,18 +459,51 @@ M109 S{extruder_temp}
         if self.state == "printing":
             raise gcmd.error("Wait for the square to finish before adjusting Z")
         delta = gcmd.get_float("Z")
+        self._apply_adjustment(gcmd, delta)
+
+    def _apply_adjustment(self, gcmd, delta):
+        if self.state == "printing":
+            raise gcmd.error("Wait for the square to finish before adjusting Z")
         new_adjustment = self.adjustment + delta
         if abs(new_adjustment) > self.max_adjustment + 1.e-9:
             raise gcmd.error(
                 "Requested adjustment exceeds max_adjustment (%.3f)"
                 % (self.max_adjustment,))
+        if self.adjustment not in self.past_adjustments:
+            self.past_adjustments.append(self.adjustment)
         self.gcode.run_script_from_command(
             "SET_GCODE_OFFSET Z_ADJUST=%.6f MOVE=1 MOVE_SPEED=%.3f"
             % (delta, self.z_speed))
         self.adjustment = new_adjustment
+        self._update_manual_probe_status()
         gcmd.respond_info(
             "First-layer Z adjustment: %+.3f (negative is more squish)"
             % (self.adjustment,))
+
+    def cmd_testz(self, gcmd):
+        self._require_active(gcmd)
+        requested = gcmd.get("Z")
+        symbolic_steps = {
+            "+": self.ui_fine_step,
+            "++": self.ui_coarse_step,
+            "-": -self.ui_fine_step,
+            "--": -self.ui_coarse_step,
+        }
+        if requested in symbolic_steps:
+            delta = symbolic_steps[requested]
+        else:
+            delta = gcmd.get_float("Z")
+        self._apply_adjustment(gcmd, delta)
+
+    def cmd_ui_accept(self, gcmd):
+        self._require_active(gcmd)
+        if self.state == "waiting":
+            self._print_next_square(gcmd)
+            return
+        if self.state == "complete":
+            self.cmd_accept(gcmd)
+            return
+        raise gcmd.error("Wait for the current squish operation to finish")
 
     def cmd_next(self, gcmd):
         self._require_active(gcmd)
@@ -412,11 +521,14 @@ M109 S{extruder_temp}
             raise gcmd.error("That square has not been printed")
         selected = self.samples[square_number - 1]["adjustment"]
         delta = selected - self.adjustment
+        if self.adjustment not in self.past_adjustments:
+            self.past_adjustments.append(self.adjustment)
         if abs(delta) > 1.e-9:
             self.gcode.run_script_from_command(
                 "SET_GCODE_OFFSET Z_ADJUST=%.6f MOVE=1 MOVE_SPEED=%.3f"
                 % (delta, self.z_speed))
         self.adjustment = selected
+        self._update_manual_probe_status()
         gcmd.respond_info(
             "Selected square %d with Z adjustment %+.3f"
             % (square_number, self.adjustment))
@@ -436,6 +548,7 @@ M109 S{extruder_temp}
         parameters = dict(self.settings)
         parameters["adjustment"] = self.adjustment
         try:
+            self._deactivate_manual_probe_ui()
             self._restore_gcode_state(True)
             self._run_template(self.end_template, parameters)
             method = self._resolve_apply_method()
@@ -449,6 +562,7 @@ M109 S{extruder_temp}
                 "%s\nSAVE_CONFIG" % (apply_command,))
         except Exception:
             self.state = "complete"
+            self._activate_manual_probe_ui()
             raise
 
     def cmd_abort(self, gcmd):
@@ -456,6 +570,7 @@ M109 S{extruder_temp}
         parameters = dict(self.settings)
         parameters["adjustment"] = self.adjustment
         try:
+            self._deactivate_manual_probe_ui()
             self._restore_gcode_state(False)
             self._run_template(self.end_template, parameters)
         finally:
@@ -464,6 +579,7 @@ M109 S{extruder_temp}
             "First-layer squish calibration aborted; Z offset restored")
 
     def _reset_state(self):
+        self._deactivate_manual_probe_ui()
         self.state = "inactive"
         self.centers = []
         self.samples = []
@@ -471,6 +587,7 @@ M109 S{extruder_temp}
         self.adjustment = 0.
         self.initial_offset = 0.
         self.state_saved = False
+        self.past_adjustments = []
         self.settings = {}
 
 

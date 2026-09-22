@@ -65,11 +65,22 @@ class GeometryTests(unittest.TestCase):
         calibration.print_speed = 30.
         calibration.retract_length = .6
         calibration.retract_speed = 30.
+        calibration.bounds = (0., 300., 0., 300.)
+        calibration.margin = 10.
         calibration.printed_count = 0
-        gcode = calibration._square_gcode((100., 100.))
+        gcode = calibration._square_gcode(
+            (100., 100.), next_center=(200., 200.))
         self.assertIn("G1 X85.0000 Y85.0000", gcode)
         self.assertIn("G1 X115.0000 Y115.0000", gcode)
-        self.assertTrue(gcode.endswith("G1 Z2.2500 F600.0\nM400"))
+        self.assertTrue(gcode.endswith(
+            "G1 Z2.2500 F600.0\nG1 X185.0000 Y185.0000 F7200.0\nM400"))
+
+    def test_final_square_parks_at_front_of_bed(self):
+        calibration = object.__new__(MODULE.FirstLayerSquish)
+        calibration.settings = {"size": 30.}
+        calibration.bounds = (0., 300., 0., 300.)
+        calibration.margin = 10.
+        self.assertEqual(calibration._inspection_position(None), (150., 5.))
 
 
 class _FakeReactor:
@@ -107,6 +118,56 @@ class StatusCompatibilityTests(unittest.TestCase):
         calibration.printer = _FakePrinter(print_stats)
         calibration._validate_not_printing(None)
         self.assertEqual(print_stats.eventtime, 123.456)
+
+
+class _FakeConfigError(Exception):
+    pass
+
+
+class _FakeGCode:
+    def __init__(self):
+        self.commands = {}
+
+    def register_command(self, name, callback, desc=None):
+        if callback is None:
+            return self.commands.pop(name, None)
+        if name in self.commands:
+            raise _FakeConfigError(name)
+        self.commands[name] = callback
+
+    def error(self, message):
+        return RuntimeError(message)
+
+
+class _FakeManualProbe:
+    def __init__(self):
+        self.status = {}
+
+    def reset_status(self):
+        self.status = {"is_active": False}
+
+
+class ManualProbeUiTests(unittest.TestCase):
+    def test_activation_publishes_status_and_commands(self):
+        calibration = object.__new__(MODULE.FirstLayerSquish)
+        calibration.gcode = _FakeGCode()
+        calibration.manual_probe = _FakeManualProbe()
+        calibration.printer = type(
+            "FakePrinter", (), {"config_error": _FakeConfigError})()
+        calibration.ui_active = False
+        calibration.adjustment = -.02
+        calibration.past_adjustments = [0., -.01]
+        calibration._activate_manual_probe_ui()
+        self.assertEqual(
+            set(calibration.gcode.commands),
+            {"ACCEPT", "NEXT", "ABORT", "TESTZ"})
+        self.assertTrue(calibration.manual_probe.status["is_active"])
+        self.assertEqual(calibration.manual_probe.status["z_position"], -.02)
+        self.assertEqual(
+            calibration.manual_probe.status["z_position_upper"], -.01)
+        calibration._deactivate_manual_probe_ui()
+        self.assertFalse(calibration.gcode.commands)
+        self.assertFalse(calibration.manual_probe.status["is_active"])
 
 
 if __name__ == "__main__":

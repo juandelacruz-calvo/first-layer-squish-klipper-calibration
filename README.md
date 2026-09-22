@@ -17,6 +17,8 @@ diameter, and inspect solid patches while adjusting Z live.
 - Rectangular perimeters with configurable diagonal solid infill (45° default)
 - Configurable temperatures, geometry, extrusion, speeds, and start/end G-code
 - Mainsail, Fluidd, and KlipperScreen macro controls
+- Native manual-probe dialog integration in Mainsail and Fluidd, with automatic
+  Z-calibration panel activation in KlipperScreen
 - Optional physical LCD menu
 - Remembers the adjustment used for every printed square
 - Applies with `Z_OFFSET_APPLY_PROBE` or `Z_OFFSET_APPLY_ENDSTOP`, then runs
@@ -63,12 +65,23 @@ the start G-code finishes.
 
 1. Clean the build surface and run `FIRST_LAYER_SQUISH`.
 2. Inspect the first patch.
-3. Run `SQUISH_MORE Z=0.01` to lower the nozzle or
-   `SQUISH_LESS Z=0.01` to raise it.
-4. Run `SQUISH_NEXT` and repeat.
+3. The normal manual-probe UI opens. Use its negative Z buttons for more squish
+   or positive Z buttons for less squish.
+4. Press **Accept** to print the next patch and repeat. After the ninth patch,
+   **Accept** applies the offset and saves the configuration.
 5. If an earlier patch was best, run `SQUISH_SELECT SQUARE=6` (for example).
-6. Run `SQUISH_ACCEPT`. The plugin applies the appropriate probe/endstop offset,
-   executes `SAVE_CONFIG`, and Klipper restarts.
+6. The macro controls remain available as an alternative: `SQUISH_MORE`,
+   `SQUISH_LESS`, `SQUISH_NEXT`, `SQUISH_ACCEPT`, and `SQUISH_ABORT`.
+
+After each patch the nozzle retracts, lifts, and travels to the next patch's
+start position so the completed surface is unobstructed. After the final patch
+it parks at the front of the bed.
+
+The manual-probe dialog is supplied by the frontend, not by Klicky itself.
+Klicky activates Klipper's built-in `manual_probe` state; this plugin publishes
+the same state and implements the same `TESTZ`, `ACCEPT`, and `ABORT` commands.
+If the dialog does not open automatically, check the manual-probe dialog setting
+in Mainsail or Fluidd.
 
 Run `SQUISH_ABORT` at any time to restore the original live offset. The default
 maximum adjustment in either direction is 0.5 mm.
