@@ -178,16 +178,8 @@ M109 S{extruder_temp}
         commands = (
             ("_FIRST_LAYER_SQUISH_START", self.cmd_start,
              "Start interactive first-layer squish calibration"),
-            ("_FIRST_LAYER_SQUISH_ADJUST", self.cmd_adjust,
-             "Adjust Z for the next first-layer square"),
-            ("_FIRST_LAYER_SQUISH_NEXT", self.cmd_next,
-             "Print the next first-layer square"),
             ("_FIRST_LAYER_SQUISH_SELECT", self.cmd_select,
              "Select the Z adjustment used for a printed square"),
-            ("_FIRST_LAYER_SQUISH_ACCEPT", self.cmd_accept,
-             "Apply and save the selected first-layer Z offset"),
-            ("_FIRST_LAYER_SQUISH_ABORT", self.cmd_abort,
-             "Abort first-layer squish calibration"),
         )
         for name, callback, description in commands:
             self.gcode.register_command(name, callback, desc=description)
@@ -454,13 +446,6 @@ M109 S{extruder_temp}
                 "press Accept to print the next square." % (
                     square_number, len(self.centers), self.adjustment))
 
-    def cmd_adjust(self, gcmd):
-        self._require_active(gcmd)
-        if self.state == "printing":
-            raise gcmd.error("Wait for the square to finish before adjusting Z")
-        delta = gcmd.get_float("Z")
-        self._apply_adjustment(gcmd, delta)
-
     def _apply_adjustment(self, gcmd, delta):
         if self.state == "printing":
             raise gcmd.error("Wait for the square to finish before adjusting Z")
@@ -504,15 +489,6 @@ M109 S{extruder_temp}
             self.cmd_accept(gcmd)
             return
         raise gcmd.error("Wait for the current squish operation to finish")
-
-    def cmd_next(self, gcmd):
-        self._require_active(gcmd)
-        if self.state != "waiting":
-            if self.state == "complete":
-                raise gcmd.error(
-                    "All squares are printed; select, accept, or abort")
-            raise gcmd.error("The calibration is not ready for the next square")
-        self._print_next_square(gcmd)
 
     def cmd_select(self, gcmd):
         self._require_active(gcmd)

@@ -70,8 +70,8 @@ the start G-code finishes.
 4. Press **Accept** to print the next patch and repeat. After the ninth patch,
    **Accept** applies the offset and saves the configuration.
 5. If an earlier patch was best, run `SQUISH_SELECT SQUARE=6` (for example).
-6. The macro controls remain available as an alternative: `SQUISH_MORE`,
-   `SQUISH_LESS`, `SQUISH_NEXT`, `SQUISH_ACCEPT`, and `SQUISH_ABORT`.
+6. The same native commands can be entered in the console while calibration is
+   active: `TESTZ Z=-0.01`, `ACCEPT`, and `ABORT`.
 
 After each patch the nozzle retracts, lifts, and travels to the next patch's
 start position so the completed surface is unobstructed. After the final patch
@@ -83,7 +83,7 @@ the same state and implements the same `TESTZ`, `ACCEPT`, and `ABORT` commands.
 If the dialog does not open automatically, check the manual-probe dialog setting
 in Mainsail or Fluidd.
 
-Run `SQUISH_ABORT` at any time to restore the original live offset. The default
+Run `ABORT` at any time to restore the original live offset. The default
 maximum adjustment in either direction is 0.5 mm.
 
 Start-time overrides are supported, for example:
