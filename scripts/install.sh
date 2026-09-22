@@ -17,4 +17,6 @@ fi
 ln -sfn "${SOURCE_FILE}" "${TARGET_FILE}"
 echo "Installed first_layer_squish.py at ${TARGET_FILE}"
 echo "Copy config/first_layer_squish.cfg into your printer config directory,"
-echo "customize start_gcode, include it from printer.cfg, and restart Klipper."
+echo "customize start_gcode, and include it from printer.cfg."
+echo "Then reload Python add-ons with: sudo systemctl restart klipper"
+echo "FIRMWARE_RESTART alone may keep the previously imported module cached."

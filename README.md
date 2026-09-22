@@ -40,7 +40,18 @@ customize its `start_gcode`, and add this to `printer.cfg`:
 ```
 
 For a physical LCD, also copy and include
-`config/first_layer_squish_menu.cfg`. Restart Klipper after installation.
+`config/first_layer_squish_menu.cfg`.
+
+Because this add-on installs Python code, restart the **Klipper system service**
+after installing or updating it:
+
+```bash
+sudo systemctl restart klipper
+```
+
+`RESTART` and `FIRMWARE_RESTART` reload printer configuration inside the
+existing Python process and may continue using an already-imported version of
+the add-on.
 
 The example start G-code heats and homes the printer. Most CoreXY machines
 should customize it to call their normal gantry-leveling, probe-docking, mesh,
