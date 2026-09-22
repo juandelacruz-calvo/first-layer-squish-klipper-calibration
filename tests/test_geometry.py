@@ -40,11 +40,24 @@ class GeometryTests(unittest.TestCase):
             MODULE.extrusion_for_distance(100., .48, .25, 1.75, .9),
             expected * .9))
 
+    def test_diagonal_infill_is_clipped_to_square(self):
+        segments = MODULE.generate_infill_segments(
+            (10., 40., 20., 50.), .48, 45.)
+        self.assertGreater(len(segments), 30)
+        for start, end in segments:
+            for x_pos, y_pos in (start, end):
+                self.assertGreaterEqual(x_pos, 10. - 1.e-7)
+                self.assertLessEqual(x_pos, 40. + 1.e-7)
+                self.assertGreaterEqual(y_pos, 20. - 1.e-7)
+                self.assertLessEqual(y_pos, 50. + 1.e-7)
+            self.assertAlmostEqual(
+                abs(end[0] - start[0]), abs(end[1] - start[1]), places=7)
+
     def test_square_toolpath_finishes_raised_and_synchronised(self):
         calibration = object.__new__(MODULE.FirstLayerSquish)
         calibration.settings = {
             "size": 30., "layer_height": .25, "line_width": .48,
-            "filament_diameter": 1.75, "flow": 1.,
+            "filament_diameter": 1.75, "flow": 1., "infill_angle": 45.,
         }
         calibration.z_hop = 2.
         calibration.z_speed = 10.

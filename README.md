@@ -14,6 +14,7 @@ diameter, and inspect solid patches while adjusting Z live.
 - Cartesian and CoreXY printers
 - Probe/virtual-endstop and dedicated Z-endstop configurations
 - Interactive free adjustment rather than a predetermined offset series
+- Rectangular perimeters with configurable diagonal solid infill (45° default)
 - Configurable temperatures, geometry, extrusion, speeds, and start/end G-code
 - Mainsail, Fluidd, and KlipperScreen macro controls
 - Optional physical LCD menu
@@ -75,7 +76,7 @@ maximum adjustment in either direction is 0.5 mm.
 Start-time overrides are supported, for example:
 
 ```gcode
-FIRST_LAYER_SQUISH BED_TEMP=105 EXTRUDER_TEMP=245 SIZE=25 FLOW=0.98
+FIRST_LAYER_SQUISH BED_TEMP=105 EXTRUDER_TEMP=245 SIZE=25 FLOW=0.98 INFILL_ANGLE=45
 ```
 
 Negative Z adjustment means more squish, matching Klipper's

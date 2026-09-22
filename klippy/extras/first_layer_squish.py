@@ -48,6 +48,53 @@ def extrusion_for_distance(distance, line_width, layer_height,
     return volume / filament_area * flow
 
 
+def generate_infill_segments(bounds, spacing, angle):
+    """Clip evenly-spaced parallel lines to a rectangular boundary."""
+    x_min, x_max, y_min, y_max = bounds
+    radians = math.radians(angle % 180.)
+    direction_x, direction_y = math.cos(radians), math.sin(radians)
+    normal_x, normal_y = -direction_y, direction_x
+    corners = ((x_min, y_min), (x_min, y_max),
+               (x_max, y_min), (x_max, y_max))
+    projections = [x_pos * normal_x + y_pos * normal_y
+                   for x_pos, y_pos in corners]
+    projection_min = min(projections) + spacing * .5
+    projection_max = max(projections) - spacing * .5
+    if projection_min > projection_max:
+        return []
+
+    segments = []
+    projection = projection_min
+    epsilon = 1.e-8
+    while projection <= projection_max + epsilon:
+        origin_x = normal_x * projection
+        origin_y = normal_y * projection
+        intersections = []
+        if abs(direction_x) > epsilon:
+            for x_pos in (x_min, x_max):
+                distance = (x_pos - origin_x) / direction_x
+                y_pos = origin_y + distance * direction_y
+                if y_min - epsilon <= y_pos <= y_max + epsilon:
+                    intersections.append((distance, x_pos, y_pos))
+        if abs(direction_y) > epsilon:
+            for y_pos in (y_min, y_max):
+                distance = (y_pos - origin_y) / direction_y
+                x_pos = origin_x + distance * direction_x
+                if x_min - epsilon <= x_pos <= x_max + epsilon:
+                    intersections.append((distance, x_pos, y_pos))
+
+        intersections.sort()
+        unique = []
+        for item in intersections:
+            if not unique or abs(item[0] - unique[-1][0]) > epsilon:
+                unique.append(item)
+        if len(unique) >= 2:
+            start, end = unique[0], unique[-1]
+            segments.append(((start[1], start[2]), (end[1], end[2])))
+        projection += spacing
+    return segments
+
+
 class FirstLayerSquish:
     def __init__(self, config):
         self.printer = config.get_printer()
@@ -83,6 +130,7 @@ class FirstLayerSquish:
         self.default_width = config.getfloat(
             "line_width", nozzle_diameter * 1.2, above=0.)
         self.default_flow = config.getfloat("flow", 1., above=0.)
+        self.default_infill_angle = config.getfloat("infill_angle", 45.)
         self.filament_diameter = config.getfloat(
             "filament_diameter",
             extruder_config.getfloat("filament_diameter", 1.75, above=0.,
@@ -207,6 +255,8 @@ M109 S{extruder_temp}
             "line_width": gcmd.get_float(
                 "LINE_WIDTH", self.default_width, above=0.),
             "flow": gcmd.get_float("FLOW", self.default_flow, above=0.),
+            "infill_angle": gcmd.get_float(
+                "INFILL_ANGLE", self.default_infill_angle) % 180.,
             "filament_diameter": gcmd.get_float(
                 "FILAMENT_DIAMETER", self.filament_diameter, above=0.),
             "bed_temp": gcmd.get_float("BED_TEMP", self.bed_temp, minval=0.),
@@ -218,6 +268,9 @@ M109 S{extruder_temp}
                 settings["count"], settings["size"], self.margin, self.bounds)
         except ValueError as error:
             raise gcmd.error(str(error))
+        if settings["size"] <= 2. * settings["line_width"]:
+            raise gcmd.error(
+                "SIZE must be greater than twice LINE_WIDTH")
 
         self.state = "starting"
         self.settings = settings
@@ -279,19 +332,21 @@ M109 S{extruder_temp}
 
         inset = settings["line_width"]
         infill_x0, infill_x1 = x0 + inset, x1 - inset
-        usable_height = max(0., settings["size"] - 2. * inset)
-        line_count = max(1, int(math.floor(
-            usable_height / settings["line_width"])) + 1)
-        y_positions = _linspace(y0 + inset, y1 - inset, line_count)
-        for index, y_pos in enumerate(y_positions):
-            if index % 2 == 0:
-                start_x, end_x = infill_x0, infill_x1
-            else:
-                start_x, end_x = infill_x1, infill_x0
+        infill_y0, infill_y1 = y0 + inset, y1 - inset
+        segments = generate_infill_segments(
+            (infill_x0, infill_x1, infill_y0, infill_y1),
+            settings["line_width"], settings["infill_angle"])
+        for index, segment in enumerate(segments):
+            start, end = segment
+            if index % 2:
+                start, end = end, start
+            start_x, start_y = start
+            end_x, end_y = end
             commands.append("G1 X%.4f Y%.4f F%.1f" % (
-                start_x, y_pos, self.print_speed * 60.))
-            self._move_line(commands, end_x, y_pos,
-                            max(0., infill_x1 - infill_x0))
+                start_x, start_y, self.print_speed * 60.))
+            self._move_line(
+                commands, end_x, end_y,
+                math.hypot(end_x - start_x, end_y - start_y))
 
         if self.retract_length:
             commands.append("G1 E-%.5f F%.1f" % (
