@@ -169,6 +169,17 @@ class ManualProbeUiTests(unittest.TestCase):
         self.assertFalse(calibration.gcode.commands)
         self.assertFalse(calibration.manual_probe.status["is_active"])
 
+    def test_current_adjustment_is_recognised_as_already_printed(self):
+        calibration = object.__new__(MODULE.FirstLayerSquish)
+        calibration.samples = [
+            {"square": 1, "adjustment": 0.},
+            {"square": 2, "adjustment": -.02},
+        ]
+        calibration.adjustment = -.02
+        self.assertTrue(calibration._adjustment_has_printed_sample())
+        calibration.adjustment = -.03
+        self.assertFalse(calibration._adjustment_has_printed_sample())
+
 
 if __name__ == "__main__":
     unittest.main()

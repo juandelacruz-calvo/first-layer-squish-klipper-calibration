@@ -209,7 +209,7 @@ M109 S{extruder_temp}
         commands = (
             ("ACCEPT", self.cmd_ui_accept,
              "Print next squish square or accept the final offset"),
-            ("NEXT", self.cmd_ui_accept,
+            ("NEXT", self.cmd_ui_next,
              "Print the next first-layer squish square"),
             ("ABORT", self.cmd_abort,
              "Abort first-layer squish calibration"),
@@ -442,8 +442,9 @@ M109 S{extruder_temp}
                 % (square_number, len(self.centers), self.adjustment))
         else:
             gcmd.respond_info(
-                "Square %d/%d printed at Z adjustment %+.3f. Adjust Z, then "
-                "press Accept to print the next square." % (
+                "Square %d/%d printed at Z adjustment %+.3f. Press Accept "
+                "to save this result, or adjust Z and press Accept to print "
+                "the next square." % (
                     square_number, len(self.centers), self.adjustment))
 
     def _apply_adjustment(self, gcmd, delta):
@@ -483,12 +484,25 @@ M109 S{extruder_temp}
     def cmd_ui_accept(self, gcmd):
         self._require_active(gcmd)
         if self.state == "waiting":
+            if self._adjustment_has_printed_sample():
+                self.cmd_accept(gcmd)
+                return
             self._print_next_square(gcmd)
             return
         if self.state == "complete":
             self.cmd_accept(gcmd)
             return
         raise gcmd.error("Wait for the current squish operation to finish")
+
+    def _adjustment_has_printed_sample(self):
+        return any(abs(sample["adjustment"] - self.adjustment) <= 1.e-9
+                   for sample in self.samples)
+
+    def cmd_ui_next(self, gcmd):
+        self._require_active(gcmd)
+        if self.state != "waiting":
+            raise gcmd.error("The calibration is not ready for the next square")
+        self._print_next_square(gcmd)
 
     def cmd_select(self, gcmd):
         self._require_active(gcmd)

@@ -1,9 +1,10 @@
 # First Layer Squish for Klipper
 
 An interactive Klipper calibration that prints first-layer patches one at a
-time. After each patch, adjust Z from Mainsail, Fluidd, KlipperScreen, the
-console, or an optional physical LCD menu, then print the next patch. The
-default layout is nine 30 mm squares distributed in a 3x3 grid.
+time. After each patch, either accept the result or adjust Z from Mainsail,
+Fluidd, KlipperScreen, the console, or an optional physical LCD menu and print
+another patch. The default maximum is nine 30 mm squares distributed in a 3x3
+grid.
 
 The workflow is based on [Ellis' First Layer Squish guide](https://ellis3dp.com/Print-Tuning-Guide/articles/first_layer_squish.html):
 use a reasonably thick first layer, a line width of at least 120% of nozzle
@@ -67,11 +68,16 @@ the start G-code finishes.
 2. Inspect the first patch.
 3. The normal manual-probe UI opens. Use its negative Z buttons for more squish
    or positive Z buttons for less squish.
-4. Press **Accept** to print the next patch and repeat. After the ninth patch,
-   **Accept** applies the offset and saves the configuration.
-5. If an earlier patch was best, run `SQUISH_SELECT SQUARE=6` (for example).
-6. The same native commands can be entered in the console while calibration is
-   active: `TESTZ Z=-0.01`, `ACCEPT`, and `ABORT`.
+4. To try another offset, adjust Z and press **Accept**. This prints the next
+   patch using the new setting.
+5. When a printed patch looks good, leave Z unchanged and press **Accept**.
+   The plugin immediately applies that offset and saves the configuration; you
+   do not have to print all nine patches.
+6. If an earlier patch was best, run `SQUISH_SELECT SQUARE=6` (for example),
+   then press **Accept**.
+7. The same native commands can be entered in the console while calibration is
+   active: `TESTZ Z=-0.01`, `ACCEPT`, `NEXT`, and `ABORT`. `NEXT` forces
+   another patch even when Z has not changed.
 
 After each patch the nozzle retracts, lifts, and travels to the next patch's
 start position so the completed surface is unobstructed. After the final patch
