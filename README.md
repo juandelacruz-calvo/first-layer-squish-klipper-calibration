@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/first-layer-squish-logo.png" alt="First Layer Squish logo" width="360">
+</p>
+
 # First Layer Squish for Klipper
 
 An interactive Klipper calibration that prints first-layer patches one at a
@@ -27,8 +31,8 @@ diameter, and inspect solid patches while adjusting Z live.
   Z-calibration panel activation in KlipperScreen
 - Optional physical LCD menu
 - Remembers the adjustment used for every printed square
-- Applies with `Z_OFFSET_APPLY_PROBE` or `Z_OFFSET_APPLY_ENDSTOP`, then runs
-  `SAVE_CONFIG`
+- Stages the result with `Z_OFFSET_APPLY_PROBE` or
+  `Z_OFFSET_APPLY_ENDSTOP`; the user decides when to run `SAVE_CONFIG`
 
 ## Installation
 
@@ -77,13 +81,19 @@ the start G-code finishes.
 4. To try another offset, adjust Z and press **Accept**. This prints the next
    patch using the new setting.
 5. When a printed patch looks good, leave Z unchanged and press **Accept**.
-   The plugin immediately applies that offset and saves the configuration; you
-   do not have to print all nine patches.
+   The plugin stages that offset in Klipper's pending configuration without
+   running `SAVE_CONFIG` or restarting Klipper; you do not have to print all
+   nine patches.
 6. If an earlier patch was best, run `SQUISH_SELECT SQUARE=6` (for example),
    then press **Accept**.
 7. The same native commands can be entered in the console while calibration is
    active: `TESTZ Z=-0.01`, `ACCEPT`, `NEXT`, and `ABORT`. `NEXT` forces
    another patch even when Z has not changed.
+
+After accepting a result, review the reported pending offset and run
+`SAVE_CONFIG` manually when ready. Klipper writes the pending change and
+restarts only when you issue that command. If Klipper is restarted before
+`SAVE_CONFIG`, the staged configuration change is discarded.
 
 After each patch the nozzle retracts, lifts, and travels to the next patch's
 start position so the completed surface is unobstructed. After the final patch

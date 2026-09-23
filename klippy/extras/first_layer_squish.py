@@ -615,12 +615,12 @@ M109 S{extruder_temp}
         if self.state == "complete":
             gcmd.respond_info(
                 "Square %d/%d printed at Z adjustment %+.3f. Adjust Z if "
-                "needed, then press Accept to apply and save, or Abort."
+                "needed, then press Accept to stage the offset, or Abort."
                 % (square_number, len(self.centers), self.adjustment))
         else:
             gcmd.respond_info(
                 "Square %d/%d printed at Z adjustment %+.3f. Press Accept "
-                "to save this result, or adjust Z and press Accept to print "
+                "to stage this result, or adjust Z and press Accept to print "
                 "the next square." % (
                     square_number, len(self.centers), self.adjustment))
 
@@ -711,9 +711,10 @@ M109 S{extruder_temp}
         self._require_active(gcmd)
         if not self.samples:
             raise gcmd.error("No first-layer square has been printed")
-        self.state = "saving"
+        self.state = "applying"
         parameters = dict(self.settings)
         parameters["adjustment"] = self.adjustment
+        accepted_adjustment = self.adjustment
         try:
             self._deactivate_manual_probe_ui()
             self._restore_gcode_state(True)
@@ -721,12 +722,13 @@ M109 S{extruder_temp}
             method = self._resolve_apply_method()
             apply_command = ("Z_OFFSET_APPLY_PROBE" if method == "probe"
                              else "Z_OFFSET_APPLY_ENDSTOP")
+            self.gcode.run_script_from_command(apply_command)
             gcmd.respond_info(
-                "Accepting first-layer Z adjustment %+.3f using %s. "
-                "Klipper will restart after SAVE_CONFIG."
-                % (self.adjustment, apply_command))
-            self.gcode.run_script_from_command(
-                "%s\nSAVE_CONFIG" % (apply_command,))
+                "First-layer Z adjustment %+.3f staged using %s. Klipper "
+                "was not restarted. Run SAVE_CONFIG when you are ready to "
+                "write the pending change and restart Klipper."
+                % (accepted_adjustment, apply_command))
+            self._reset_state()
         except Exception:
             self.state = "complete"
             self._activate_manual_probe_ui()

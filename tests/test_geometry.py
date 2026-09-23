@@ -215,6 +215,47 @@ class ManualProbeUiTests(unittest.TestCase):
         calibration.adjustment = -.03
         self.assertFalse(calibration._adjustment_has_printed_sample())
 
+    def test_accept_stages_offset_without_running_save_config(self):
+        class CaptureGcode:
+            def __init__(self):
+                self.scripts = []
+
+            def run_script_from_command(self, script):
+                self.scripts.append(script)
+
+        class CaptureCommand:
+            def __init__(self):
+                self.responses = []
+
+            def respond_info(self, message):
+                self.responses.append(message)
+
+            def error(self, message):
+                return RuntimeError(message)
+
+        calibration = object.__new__(MODULE.FirstLayerSquish)
+        calibration.state = "waiting"
+        calibration.samples = [{"square": 1, "adjustment": -.02}]
+        calibration.settings = {}
+        calibration.adjustment = -.02
+        calibration.gcode = CaptureGcode()
+        calibration.ui_active = False
+        calibration.state_saved = False
+        calibration._deactivate_manual_probe_ui = lambda: None
+        calibration._restore_gcode_state = lambda keep: None
+        calibration._run_template = lambda template, parameters: None
+        calibration._resolve_apply_method = lambda: "probe"
+        calibration.end_template = None
+        gcmd = CaptureCommand()
+
+        calibration.cmd_accept(gcmd)
+
+        self.assertEqual(calibration.gcode.scripts,
+                         ["Z_OFFSET_APPLY_PROBE"])
+        self.assertNotIn("SAVE_CONFIG", "\n".join(calibration.gcode.scripts))
+        self.assertEqual(calibration.state, "inactive")
+        self.assertIn("Run SAVE_CONFIG", gcmd.responses[0])
+
 
 class _FakeProfileConfig:
     def __init__(self, name, values):
