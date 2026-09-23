@@ -1,6 +1,38 @@
-GNU GENERAL PUBLIC LICENSE
-Version 3, 29 June 2007
+First Layer Squish licensing
+============================
 
-This project is licensed under the GNU General Public License, version 3.
+Copyright (c) 2026 Juan Calvo
+
+Software
+--------
+
+The source code, configuration files, and installation scripts in this
+repository are licensed under the GNU General Public License, version 3.0
+(GPL-3.0-only).
+
 The complete license text is available at:
 https://www.gnu.org/licenses/gpl-3.0.txt
+
+Documentation and artwork
+-------------------------
+
+The documentation and artwork in this repository, including README.md and the
+files under assets/, are licensed under the Creative Commons
+Attribution-ShareAlike 4.0 International license (CC BY-SA 4.0).
+
+The complete license terms are available at:
+https://creativecommons.org/licenses/by-sa/4.0/legalcode
+
+When redistributing or adapting the documentation or artwork, credit it as:
+
+    First Layer Squish by Juan Calvo
+
+Include a link to this repository or to the CC BY-SA 4.0 license, indicate if
+changes were made, and distribute adaptations under CC BY-SA 4.0.
+
+Trademark notice
+----------------
+
+The CC BY-SA 4.0 license applies to copyright only. It does not grant trademark
+rights or permission to imply endorsement by Juan Calvo or the First Layer
+Squish project.

@@ -161,6 +161,18 @@ The geometry and extrusion tests use Python's standard test runner:
 python -m unittest discover -s tests -v
 ```
 
+## License
+
+The source code, configuration files, and installation scripts are licensed
+under [GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.html).
+
+The documentation and artwork, including this README and the files in
+`assets/`, are © 2026 Juan Calvo and licensed under
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Credit them as
+“First Layer Squish by Juan Calvo,” indicate any changes, and license adapted
+versions under the same terms. The Creative Commons license does not grant
+trademark rights or permission to imply endorsement.
+
 ## Safety
 
 Watch the first run closely and keep emergency-stop access available. Verify
