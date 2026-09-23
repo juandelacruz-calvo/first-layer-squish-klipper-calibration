@@ -48,6 +48,51 @@ def extrusion_for_distance(distance, line_width, layer_height,
     return volume / filament_area * flow
 
 
+def generate_wipe_points(center, square_size, line_length, line_count,
+                         line_spacing, gap, line_width, bounds):
+    """Return a connected purge strip adjacent to a calibration square."""
+    if line_length <= 0. or line_count <= 0:
+        return []
+    x_min, x_max, y_min, y_max = bounds
+    bead_radius = line_width * .5
+    usable_x_min = x_min + bead_radius
+    usable_x_max = x_max - bead_radius
+    if line_length > usable_x_max - usable_x_min:
+        raise ValueError("wipe line does not fit inside the X travel limits")
+
+    start_x = center[0] - line_length * .5
+    start_x = min(max(start_x, usable_x_min),
+                  usable_x_max - line_length)
+    end_x = start_x + line_length
+    square_y_min = center[1] - square_size * .5
+    square_y_max = center[1] + square_size * .5
+    strip_width = line_spacing * (line_count - 1)
+
+    below_y = square_y_min - gap
+    above_y = square_y_max + gap
+    if below_y - strip_width - bead_radius >= y_min:
+        first_y = below_y
+        y_direction = -1.
+    elif above_y + strip_width + bead_radius <= y_max:
+        first_y = above_y
+        y_direction = 1.
+    else:
+        raise ValueError(
+            "wipe line does not fit beside a calibration square; increase "
+            "bed_margin or reduce WIPE_LINES, WIPE_SPACING, or WIPE_GAP")
+
+    points = [(start_x, first_y)]
+    current_x = start_x
+    for line_index in range(line_count):
+        current_y = first_y + y_direction * line_spacing * line_index
+        target_x = end_x if line_index % 2 == 0 else start_x
+        if line_index:
+            points.append((current_x, current_y))
+        points.append((target_x, current_y))
+        current_x = target_x
+    return points
+
+
 def generate_infill_segments(bounds, spacing, angle):
     """Clip evenly-spaced parallel lines to a rectangular boundary."""
     x_min, x_max, y_min, y_max = bounds
@@ -144,6 +189,16 @@ class FirstLayerSquish:
         self.z_speed = config.getfloat("z_speed", 10., above=0.)
         self.retract_length = config.getfloat("retract_length", .6, minval=0.)
         self.retract_speed = config.getfloat("retract_speed", 30., above=0.)
+        self.default_wipe_length = config.getfloat(
+            "wipe_line_length", 40., minval=0.)
+        self.default_wipe_lines = config.getint(
+            "wipe_line_count", 2, minval=1, maxval=10)
+        self.default_wipe_spacing = config.getfloat(
+            "wipe_line_spacing", .6, above=0.)
+        self.default_wipe_gap = config.getfloat(
+            "wipe_line_gap", 2., minval=0.)
+        self.default_wipe_tail = config.getfloat(
+            "wipe_tail_length", 5., minval=0.)
         self.z_hop = config.getfloat("z_hop", 2., minval=0.)
         self.max_adjustment = config.getfloat("max_adjustment", .5, above=0.)
         self.ui_fine_step = config.getfloat("ui_fine_step", .01, above=0.)
@@ -360,6 +415,16 @@ M109 S{extruder_temp}
             "hotend_temp": hotend_temp,
             "chamber_temp": gcmd.get_float(
                 "CHAMBER_TEMP", profile["chamber_temp"], minval=0.),
+            "wipe_length": gcmd.get_float(
+                "WIPE_LENGTH", self.default_wipe_length, minval=0.),
+            "wipe_lines": gcmd.get_int(
+                "WIPE_LINES", self.default_wipe_lines, minval=1, maxval=10),
+            "wipe_spacing": gcmd.get_float(
+                "WIPE_SPACING", self.default_wipe_spacing, above=0.),
+            "wipe_gap": gcmd.get_float(
+                "WIPE_GAP", self.default_wipe_gap, minval=0.),
+            "wipe_tail": gcmd.get_float(
+                "WIPE_TAIL", self.default_wipe_tail, minval=0.),
         }
         try:
             centers = generate_square_centers(
@@ -369,6 +434,14 @@ M109 S{extruder_temp}
         if settings["size"] <= 2. * settings["line_width"]:
             raise gcmd.error(
                 "SIZE must be greater than twice LINE_WIDTH")
+        try:
+            for center in centers:
+                generate_wipe_points(
+                    center, settings["size"], settings["wipe_length"],
+                    settings["wipe_lines"], settings["wipe_spacing"],
+                    settings["wipe_gap"], settings["line_width"], self.bounds)
+        except ValueError as error:
+            raise gcmd.error(str(error))
 
         self.state = "starting"
         self.settings = settings
@@ -452,10 +525,55 @@ M109 S{extruder_temp}
         y0, y1 = center[1] - half_size, center[1] + half_size
         final_z = settings["layer_height"] * settings["layer_count"]
         safe_z = final_z + self.z_hop
+        wipe_points = generate_wipe_points(
+            center, settings["size"], settings["wipe_length"],
+            settings["wipe_lines"], settings["wipe_spacing"],
+            settings["wipe_gap"], settings["line_width"], self.bounds)
         commands = [
             "G90", "M83", "G1 Z%.4f F%.1f" % (safe_z, self.z_speed * 60.),
-            "G1 X%.4f Y%.4f F%.1f" % (x0, y0, self.travel_speed * 60.),
         ]
+
+        if wipe_points:
+            wipe_x, wipe_y = wipe_points[0]
+            commands.extend((
+                "G1 X%.4f Y%.4f F%.1f" % (
+                    wipe_x, wipe_y, self.travel_speed * 60.),
+                "G1 Z%.4f F%.1f" % (
+                    settings["layer_height"], self.z_speed * 60.),
+            ))
+            if self.printed_count and self.retract_length:
+                commands.append("G1 E%.5f F%.1f" % (
+                    self.retract_length, self.retract_speed * 60.))
+            previous = wipe_points[0]
+            for point in wipe_points[1:]:
+                self._move_line(
+                    commands, point[0], point[1],
+                    math.hypot(point[0] - previous[0],
+                               point[1] - previous[1]))
+                previous = point
+            if self.retract_length:
+                commands.append("G1 E-%.5f F%.1f" % (
+                    self.retract_length, self.retract_speed * 60.))
+            if settings["wipe_tail"] and len(wipe_points) > 1:
+                wipe_end = wipe_points[-1]
+                wipe_previous = wipe_points[-2]
+                final_segment = math.hypot(
+                    wipe_previous[0] - wipe_end[0],
+                    wipe_previous[1] - wipe_end[1])
+                if final_segment:
+                    tail_length = min(settings["wipe_tail"], final_segment)
+                    tail_scale = tail_length / final_segment
+                    tail_x = (wipe_end[0]
+                              + (wipe_previous[0] - wipe_end[0]) * tail_scale)
+                    tail_y = (wipe_end[1]
+                              + (wipe_previous[1] - wipe_end[1]) * tail_scale)
+                    commands.append("G1 X%.4f Y%.4f F%.1f" % (
+                        tail_x, tail_y, self.travel_speed * 60.))
+            commands.append("G1 Z%.4f F%.1f" % (
+                safe_z, self.z_speed * 60.))
+
+        commands.append("G1 X%.4f Y%.4f F%.1f" % (
+            x0, y0, self.travel_speed * 60.))
 
         for layer_index in range(settings["layer_count"]):
             layer_z = settings["layer_height"] * (layer_index + 1)
@@ -464,7 +582,8 @@ M109 S{extruder_temp}
             if layer_index:
                 commands.append("G1 X%.4f Y%.4f F%.1f" % (
                     x0, y0, self.travel_speed * 60.))
-            if self.printed_count or layer_index:
+            if ((wipe_points or self.printed_count or layer_index)
+                    and self.retract_length):
                 commands.append("G1 E%.5f F%.1f" % (
                     self.retract_length, self.retract_speed * 60.))
 

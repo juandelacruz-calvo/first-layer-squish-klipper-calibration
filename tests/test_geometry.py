@@ -40,6 +40,25 @@ class GeometryTests(unittest.TestCase):
             MODULE.extrusion_for_distance(100., .48, .25, 1.75, .9),
             expected * .9))
 
+    def test_wipe_strip_is_substantial_and_stays_outside_square(self):
+        points = MODULE.generate_wipe_points(
+            (20., 20.), 20., 40., 2, .6, 2., .48,
+            (0., 300., 0., 300.))
+        self.assertEqual(len(points), 4)
+        distance = sum(math.hypot(end[0] - start[0], end[1] - start[1])
+                       for start, end in zip(points, points[1:]))
+        self.assertAlmostEqual(distance, 80.6)
+        for x_pos, y_pos in points:
+            self.assertGreaterEqual(x_pos, .24)
+            self.assertLessEqual(x_pos, 299.76)
+            self.assertLess(y_pos, 10.)
+
+    def test_wipe_strip_moves_above_square_when_below_does_not_fit(self):
+        points = MODULE.generate_wipe_points(
+            (50., 10.), 20., 40., 2, .6, 2., .48,
+            (0., 100., 0., 100.))
+        self.assertTrue(all(y_pos > 20. for _, y_pos in points))
+
     def test_diagonal_infill_is_clipped_to_square(self):
         segments = MODULE.generate_infill_segments(
             (10., 40., 20., 50.), .48, 45.)
@@ -58,7 +77,8 @@ class GeometryTests(unittest.TestCase):
         calibration.settings = {
             "size": 30., "layer_height": .25, "line_width": .48,
             "layer_count": 4, "filament_diameter": 1.75, "flow": 1.,
-            "infill_angle": 45.,
+            "infill_angle": 45., "wipe_length": 40., "wipe_lines": 2,
+            "wipe_spacing": .6, "wipe_gap": 2., "wipe_tail": 5.,
         }
         calibration.z_hop = 2.
         calibration.z_speed = 10.
@@ -75,8 +95,20 @@ class GeometryTests(unittest.TestCase):
         self.assertIn("G1 X115.0000 Y115.0000", gcode)
         self.assertIn("G1 Z0.2500 F600.0", gcode)
         self.assertIn("G1 Z1.0000 F600.0", gcode)
+        self.assertIn("G1 X120.0000 Y83.0000", gcode)
+        self.assertIn("G1 X80.0000 Y82.4000", gcode)
+        self.assertIn("G1 X85.0000 Y82.4000 F7200.0", gcode)
+        purge_move = "G1 X120.0000 Y83.0000 E1.99561 F1800.0"
+        self.assertLess(gcode.index(purge_move),
+                        gcode.index("G1 E0.60000 F1800.0"))
         self.assertTrue(gcode.endswith(
             "G1 Z3.0000 F600.0\nG1 X185.0000 Y185.0000 F7200.0\nM400"))
+
+        calibration.printed_count = 1
+        next_gcode = calibration._square_gcode(
+            (100., 100.), next_center=(200., 200.))
+        self.assertLess(next_gcode.index("G1 E0.60000 F1800.0"),
+                        next_gcode.index(purge_move))
 
     def test_final_square_parks_at_front_of_bed(self):
         calibration = object.__new__(MODULE.FirstLayerSquish)

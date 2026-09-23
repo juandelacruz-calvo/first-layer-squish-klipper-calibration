@@ -19,6 +19,8 @@ diameter, and inspect solid patches while adjusting Z live.
 - Configurable 3-20 layer patches (four layers by default), with alternating
   solid-infill direction between layers
 - Configurable temperatures, geometry, extrusion, speeds, and start/end G-code
+- A substantial two-pass purge/wipe strip before every patch, preventing pause
+  ooze from contaminating the calibration surface
 - Named PLA, TPU, and ABS temperature profiles selected from the start command
 - Mainsail, Fluidd, and KlipperScreen macro controls
 - Native manual-probe dialog integration in Mainsail and Fluidd, with automatic
@@ -86,6 +88,16 @@ the start G-code finishes.
 After each patch the nozzle retracts, lifts, and travels to the next patch's
 start position so the completed surface is unobstructed. After the final patch
 it parks at the front of the bed.
+
+Before every patch, including the first, the nozzle prints a separate two-pass
+40 mm purge/wipe strip beside the upcoming square. It then retracts and drags
+the nozzle 5 mm back over the fresh strip before lifting. This removes material
+that oozed during the interactive pause and restores nozzle pressure before the
+calibration surface begins. Configure it with `wipe_line_length`,
+`wipe_line_count`, `wipe_line_spacing`, `wipe_line_gap`, and
+`wipe_tail_length`; set `wipe_line_length: 0` to disable it. Individual runs
+may override these values with `WIPE_LENGTH`, `WIPE_LINES`, `WIPE_SPACING`,
+`WIPE_GAP`, and `WIPE_TAIL`.
 
 The manual-probe dialog is supplied by the frontend, not by Klicky itself.
 Klicky activates Klipper's built-in `manual_probe` state; this plugin publishes
