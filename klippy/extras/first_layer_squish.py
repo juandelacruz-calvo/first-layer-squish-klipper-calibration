@@ -126,7 +126,9 @@ class FirstLayerSquish:
             "nozzle_diameter", .4, above=0., note_valid=False)
         self.default_count = config.getint("square_count", 9, minval=1,
                                            maxval=25)
-        self.default_size = config.getfloat("square_size", 30., above=0.)
+        self.default_size = config.getfloat("square_size", 20., above=0.)
+        self.default_layer_count = config.getint(
+            "layer_count", 4, minval=3, maxval=20)
         self.default_height = config.getfloat("layer_height", .25, above=0.)
         self.default_width = config.getfloat(
             "line_width", nozzle_diameter * 1.2, above=0.)
@@ -298,6 +300,8 @@ M109 S{extruder_temp}
             "count": gcmd.get_int("COUNT", self.default_count,
                                   minval=1, maxval=25),
             "size": gcmd.get_float("SIZE", self.default_size, above=0.),
+            "layer_count": gcmd.get_int(
+                "LAYERS", self.default_layer_count, minval=3, maxval=20),
             "layer_height": gcmd.get_float(
                 "LAYER_HEIGHT", self.default_height, above=0.),
             "line_width": gcmd.get_float(
@@ -368,21 +372,9 @@ M109 S{extruder_temp}
         park_y = min(y_max, y_min + max(2., self.margin * .5))
         return park_x, park_y
 
-    def _square_gcode(self, center, next_center=None):
+    def _append_layer_gcode(self, commands, bounds, infill_angle):
         settings = self.settings
-        half_size = settings["size"] * .5
-        x0, x1 = center[0] - half_size, center[0] + half_size
-        y0, y1 = center[1] - half_size, center[1] + half_size
-        safe_z = settings["layer_height"] + self.z_hop
-        commands = [
-            "G90", "M83", "G1 Z%.4f F%.1f" % (safe_z, self.z_speed * 60.),
-            "G1 X%.4f Y%.4f F%.1f" % (x0, y0, self.travel_speed * 60.),
-            "G1 Z%.4f F%.1f" % (
-                settings["layer_height"], self.z_speed * 60.),
-        ]
-        if self.printed_count:
-            commands.append("G1 E%.5f F%.1f" % (
-                self.retract_length, self.retract_speed * 60.))
+        x0, x1, y0, y1 = bounds
 
         self._move_line(commands, x1, y0, settings["size"])
         self._move_line(commands, x1, y1, settings["size"])
@@ -394,7 +386,7 @@ M109 S{extruder_temp}
         infill_y0, infill_y1 = y0 + inset, y1 - inset
         segments = generate_infill_segments(
             (infill_x0, infill_x1, infill_y0, infill_y1),
-            settings["line_width"], settings["infill_angle"])
+            settings["line_width"], infill_angle)
         for index, segment in enumerate(segments):
             start, end = segment
             if index % 2:
@@ -407,9 +399,37 @@ M109 S{extruder_temp}
                 commands, end_x, end_y,
                 math.hypot(end_x - start_x, end_y - start_y))
 
-        if self.retract_length:
-            commands.append("G1 E-%.5f F%.1f" % (
-                self.retract_length, self.retract_speed * 60.))
+    def _square_gcode(self, center, next_center=None):
+        settings = self.settings
+        half_size = settings["size"] * .5
+        x0, x1 = center[0] - half_size, center[0] + half_size
+        y0, y1 = center[1] - half_size, center[1] + half_size
+        final_z = settings["layer_height"] * settings["layer_count"]
+        safe_z = final_z + self.z_hop
+        commands = [
+            "G90", "M83", "G1 Z%.4f F%.1f" % (safe_z, self.z_speed * 60.),
+            "G1 X%.4f Y%.4f F%.1f" % (x0, y0, self.travel_speed * 60.),
+        ]
+
+        for layer_index in range(settings["layer_count"]):
+            layer_z = settings["layer_height"] * (layer_index + 1)
+            commands.append("G1 Z%.4f F%.1f" % (
+                layer_z, self.z_speed * 60.))
+            if layer_index:
+                commands.append("G1 X%.4f Y%.4f F%.1f" % (
+                    x0, y0, self.travel_speed * 60.))
+            if self.printed_count or layer_index:
+                commands.append("G1 E%.5f F%.1f" % (
+                    self.retract_length, self.retract_speed * 60.))
+
+            angle = (settings["infill_angle"]
+                     + (90. if layer_index % 2 else 0.)) % 180.
+            self._append_layer_gcode(
+                commands, (x0, x1, y0, y1), angle)
+            if self.retract_length:
+                commands.append("G1 E-%.5f F%.1f" % (
+                    self.retract_length, self.retract_speed * 60.))
+
         inspect_x, inspect_y = self._inspection_position(next_center)
         commands.extend((
             "G1 Z%.4f F%.1f" % (safe_z, self.z_speed * 60.),

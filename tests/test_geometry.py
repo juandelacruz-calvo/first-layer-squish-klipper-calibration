@@ -57,7 +57,8 @@ class GeometryTests(unittest.TestCase):
         calibration = object.__new__(MODULE.FirstLayerSquish)
         calibration.settings = {
             "size": 30., "layer_height": .25, "line_width": .48,
-            "filament_diameter": 1.75, "flow": 1., "infill_angle": 45.,
+            "layer_count": 4, "filament_diameter": 1.75, "flow": 1.,
+            "infill_angle": 45.,
         }
         calibration.z_hop = 2.
         calibration.z_speed = 10.
@@ -72,8 +73,10 @@ class GeometryTests(unittest.TestCase):
             (100., 100.), next_center=(200., 200.))
         self.assertIn("G1 X85.0000 Y85.0000", gcode)
         self.assertIn("G1 X115.0000 Y115.0000", gcode)
+        self.assertIn("G1 Z0.2500 F600.0", gcode)
+        self.assertIn("G1 Z1.0000 F600.0", gcode)
         self.assertTrue(gcode.endswith(
-            "G1 Z2.2500 F600.0\nG1 X185.0000 Y185.0000 F7200.0\nM400"))
+            "G1 Z3.0000 F600.0\nG1 X185.0000 Y185.0000 F7200.0\nM400"))
 
     def test_final_square_parks_at_front_of_bed(self):
         calibration = object.__new__(MODULE.FirstLayerSquish)

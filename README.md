@@ -3,8 +3,8 @@
 An interactive Klipper calibration that prints first-layer patches one at a
 time. After each patch, either accept the result or adjust Z from Mainsail,
 Fluidd, KlipperScreen, the console, or an optional physical LCD menu and print
-another patch. The default maximum is nine 30 mm squares distributed in a 3x3
-grid.
+another patch. The default maximum is nine 20 mm (2 cm) squares distributed in
+a 3x3 grid, with four layers per square.
 
 The workflow is based on [Ellis' First Layer Squish guide](https://ellis3dp.com/Print-Tuning-Guide/articles/first_layer_squish.html):
 use a reasonably thick first layer, a line width of at least 120% of nozzle
@@ -16,6 +16,8 @@ diameter, and inspect solid patches while adjusting Z live.
 - Probe/virtual-endstop and dedicated Z-endstop configurations
 - Interactive free adjustment rather than a predetermined offset series
 - Rectangular perimeters with configurable diagonal solid infill (45° default)
+- Configurable 3-20 layer patches (four layers by default), with alternating
+  solid-infill direction between layers
 - Configurable temperatures, geometry, extrusion, speeds, and start/end G-code
 - Mainsail, Fluidd, and KlipperScreen macro controls
 - Native manual-probe dialog integration in Mainsail and Fluidd, with automatic
@@ -95,7 +97,7 @@ maximum adjustment in either direction is 0.5 mm.
 Start-time overrides are supported, for example:
 
 ```gcode
-FIRST_LAYER_SQUISH BED_TEMP=105 EXTRUDER_TEMP=245 SIZE=25 FLOW=0.98 INFILL_ANGLE=45
+FIRST_LAYER_SQUISH BED_TEMP=105 EXTRUDER_TEMP=245 SIZE=20 LAYERS=4 FLOW=0.98 INFILL_ANGLE=45
 ```
 
 Negative Z adjustment means more squish, matching Klipper's
