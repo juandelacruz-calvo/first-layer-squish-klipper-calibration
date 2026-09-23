@@ -148,7 +148,7 @@ the repository update with the rest of the printer software:
 [update_manager first-layer-squish]
 type: git_repo
 path: ~/first-layer-squish-klipper-calibration
-origin: https://github.com/YOUR_ACCOUNT/first-layer-squish-klipper-calibration.git
+origin: https://github.com/juandelacruz-calvo/first-layer-squish-klipper-calibration.git
 primary_branch: main
 managed_services: klipper
 ```
