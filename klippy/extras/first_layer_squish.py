@@ -150,6 +150,15 @@ class FirstLayerSquish:
         self.ui_coarse_step = config.getfloat("ui_coarse_step", .05, above=0.)
         self.bed_temp = config.getfloat("bed_temp", 60., minval=0.)
         self.extruder_temp = config.getfloat("extruder_temp", 200., minval=0.)
+        self.filament_profiles = {
+            "PLA": {"bed_temp": self.bed_temp,
+                    "hotend_temp": self.extruder_temp,
+                    "chamber_temp": 25.},
+            "TPU": {"bed_temp": 50., "hotend_temp": 225.,
+                    "chamber_temp": 30.},
+            "ABS": {"bed_temp": 110., "hotend_temp": 250.,
+                    "chamber_temp": 50.},
+        }
         self.apply_method = config.getchoice(
             "apply_method", {"auto": "auto", "probe": "probe",
                              "endstop": "endstop"}, default="auto")
@@ -194,7 +203,27 @@ M109 S{extruder_temp}
             "square_count": len(self.centers),
             "adjustment": self.adjustment,
             "initial_offset": self.initial_offset,
+            "filament": self.settings.get("filament"),
+            "filament_profiles": sorted(self.filament_profiles),
             "samples": [dict(sample) for sample in self.samples],
+        }
+
+    def add_filament_profile(self, config):
+        profile_name = config.get_name().split()[-1].strip().upper()
+        if not profile_name:
+            raise config.error("A filament profile name is required")
+        current = self.filament_profiles.get(profile_name, {
+            "bed_temp": self.bed_temp,
+            "hotend_temp": self.extruder_temp,
+            "chamber_temp": 0.,
+        })
+        self.filament_profiles[profile_name] = {
+            "bed_temp": config.getfloat(
+                "bed_temp", current["bed_temp"], minval=0.),
+            "hotend_temp": config.getfloat(
+                "hotend_temp", current["hotend_temp"], minval=0.),
+            "chamber_temp": config.getfloat(
+                "chamber_temp", current["chamber_temp"], minval=0.),
         }
 
     def _require_active(self, gcmd):
@@ -296,7 +325,21 @@ M109 S{extruder_temp}
             raise gcmd.error("A first-layer squish calibration is active")
         self._validate_not_printing(gcmd)
 
+        filament = gcmd.get("FILAMENT").strip().upper()
+        if filament not in self.filament_profiles:
+            raise gcmd.error(
+                "Unknown FILAMENT '%s'; configured profiles: %s" % (
+                    filament, ", ".join(sorted(self.filament_profiles))))
+        profile = self.filament_profiles[filament]
+        command_parameters = gcmd.get_command_parameters()
+        if "HOTEND_TEMP" in command_parameters:
+            hotend_temp = gcmd.get_float("HOTEND_TEMP", minval=0.)
+        else:
+            hotend_temp = gcmd.get_float(
+                "EXTRUDER_TEMP", profile["hotend_temp"], minval=0.)
+
         settings = {
+            "filament": filament,
             "count": gcmd.get_int("COUNT", self.default_count,
                                   minval=1, maxval=25),
             "size": gcmd.get_float("SIZE", self.default_size, above=0.),
@@ -311,9 +354,12 @@ M109 S{extruder_temp}
                 "INFILL_ANGLE", self.default_infill_angle) % 180.,
             "filament_diameter": gcmd.get_float(
                 "FILAMENT_DIAMETER", self.filament_diameter, above=0.),
-            "bed_temp": gcmd.get_float("BED_TEMP", self.bed_temp, minval=0.),
-            "extruder_temp": gcmd.get_float(
-                "EXTRUDER_TEMP", self.extruder_temp, minval=0.),
+            "bed_temp": gcmd.get_float(
+                "BED_TEMP", profile["bed_temp"], minval=0.),
+            "extruder_temp": hotend_temp,
+            "hotend_temp": hotend_temp,
+            "chamber_temp": gcmd.get_float(
+                "CHAMBER_TEMP", profile["chamber_temp"], minval=0.),
         }
         try:
             centers = generate_square_centers(
@@ -603,3 +649,13 @@ M109 S{extruder_temp}
 
 def load_config(config):
     return FirstLayerSquish(config)
+
+
+def load_config_prefix(config):
+    printer = config.get_printer()
+    calibration = printer.lookup_object("first_layer_squish", None)
+    if calibration is None:
+        raise config.error(
+            "[first_layer_squish] must appear before filament profiles")
+    calibration.add_filament_profile(config)
+    return calibration

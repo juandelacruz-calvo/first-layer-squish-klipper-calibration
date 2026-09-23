@@ -184,5 +184,33 @@ class ManualProbeUiTests(unittest.TestCase):
         self.assertFalse(calibration._adjustment_has_printed_sample())
 
 
+class _FakeProfileConfig:
+    def __init__(self, name, values):
+        self.name = name
+        self.values = values
+
+    def get_name(self):
+        return self.name
+
+    def getfloat(self, option, default, minval=None):
+        value = float(self.values.get(option, default))
+        if minval is not None and value < minval:
+            raise ValueError(option)
+        return value
+
+
+class FilamentProfileTests(unittest.TestCase):
+    def test_config_section_overrides_material_temperatures(self):
+        calibration = object.__new__(MODULE.FirstLayerSquish)
+        calibration.bed_temp = 60.
+        calibration.extruder_temp = 200.
+        calibration.filament_profiles = {}
+        calibration.add_filament_profile(_FakeProfileConfig(
+            "first_layer_squish ABS",
+            {"hotend_temp": 255, "bed_temp": 105, "chamber_temp": 55}))
+        self.assertEqual(calibration.filament_profiles["ABS"], {
+            "hotend_temp": 255., "bed_temp": 105., "chamber_temp": 55.})
+
+
 if __name__ == "__main__":
     unittest.main()

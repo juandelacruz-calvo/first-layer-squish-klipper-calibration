@@ -19,6 +19,7 @@ diameter, and inspect solid patches while adjusting Z live.
 - Configurable 3-20 layer patches (four layers by default), with alternating
   solid-infill direction between layers
 - Configurable temperatures, geometry, extrusion, speeds, and start/end G-code
+- Named PLA, TPU, and ABS temperature profiles selected from the start command
 - Mainsail, Fluidd, and KlipperScreen macro controls
 - Native manual-probe dialog integration in Mainsail and Fluidd, with automatic
   Z-calibration panel activation in KlipperScreen
@@ -66,7 +67,8 @@ the start G-code finishes.
 
 ## Usage
 
-1. Clean the build surface and run `FIRST_LAYER_SQUISH`.
+1. Clean the build surface and run `FIRST_LAYER_SQUISH FILAMENT=PLA` (or TPU
+   or ABS).
 2. Inspect the first patch.
 3. The normal manual-probe UI opens. Use its negative Z buttons for more squish
    or positive Z buttons for less squish.
@@ -97,8 +99,25 @@ maximum adjustment in either direction is 0.5 mm.
 Start-time overrides are supported, for example:
 
 ```gcode
-FIRST_LAYER_SQUISH BED_TEMP=105 EXTRUDER_TEMP=245 SIZE=20 LAYERS=4 FLOW=0.98 INFILL_ANGLE=45
+FIRST_LAYER_SQUISH FILAMENT=ABS SIZE=20 LAYERS=4 FLOW=0.98 INFILL_ANGLE=45
 ```
+
+The supplied material sections contain starting temperatures:
+
+| Profile | Hotend | Bed | Chamber |
+| --- | ---: | ---: | ---: |
+| PLA | 210 °C | 60 °C | 25 °C |
+| TPU | 225 °C | 50 °C | 30 °C |
+| ABS | 250 °C | 110 °C | 50 °C |
+
+The `FILAMENT` parameter is required. Select a profile with `FILAMENT=PLA`,
+`FILAMENT=TPU`, or `FILAMENT=ABS`; profile names are case-insensitive.
+Individual runs may override `HOTEND_TEMP`, `BED_TEMP`, or `CHAMBER_TEMP`.
+
+`chamber_temp` is passed into `start_gcode`, but the default template does not
+act on it because Klipper does not standardize chamber heater/sensor names. Add
+the printer's heat-soak macro or `TEMPERATURE_WAIT` command to `start_gcode` if
+the chamber target should be enforced automatically.
 
 Negative Z adjustment means more squish, matching Klipper's
 `SET_GCODE_OFFSET Z_ADJUST=...` convention.
