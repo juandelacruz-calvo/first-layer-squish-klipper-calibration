@@ -116,20 +116,15 @@ FIRST_LAYER_SQUISH FILAMENT=ABS SIZE=20 LAYERS=4 FLOW=0.98 INFILL_ANGLE=45
 
 The supplied material sections contain starting temperatures:
 
-| Profile | Hotend | Bed | Chamber |
-| --- | ---: | ---: | ---: |
-| PLA | 210 °C | 60 °C | 25 °C |
-| TPU | 225 °C | 50 °C | 30 °C |
-| ABS | 250 °C | 110 °C | 50 °C |
+| Profile | Hotend | Bed |
+| --- | ---: | ---: |
+| PLA | 210 °C | 60 °C |
+| TPU | 225 °C | 50 °C |
+| ABS | 250 °C | 110 °C |
 
 The `FILAMENT` parameter is required. Select a profile with `FILAMENT=PLA`,
 `FILAMENT=TPU`, or `FILAMENT=ABS`; profile names are case-insensitive.
-Individual runs may override `HOTEND_TEMP`, `BED_TEMP`, or `CHAMBER_TEMP`.
-
-`chamber_temp` is passed into `start_gcode`, but the default template does not
-act on it because Klipper does not standardize chamber heater/sensor names. Add
-the printer's heat-soak macro or `TEMPERATURE_WAIT` command to `start_gcode` if
-the chamber target should be enforced automatically.
+Individual runs may override `HOTEND_TEMP` or `BED_TEMP`.
 
 Negative Z adjustment means more squish, matching Klipper's
 `SET_GCODE_OFFSET Z_ADJUST=...` convention.

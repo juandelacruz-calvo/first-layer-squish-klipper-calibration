@@ -239,9 +239,9 @@ class FilamentProfileTests(unittest.TestCase):
         calibration.filament_profiles = {}
         calibration.add_filament_profile(_FakeProfileConfig(
             "first_layer_squish ABS",
-            {"hotend_temp": 255, "bed_temp": 105, "chamber_temp": 55}))
+            {"hotend_temp": 255, "bed_temp": 105}))
         self.assertEqual(calibration.filament_profiles["ABS"], {
-            "hotend_temp": 255., "bed_temp": 105., "chamber_temp": 55.})
+            "hotend_temp": 255., "bed_temp": 105.})
 
 
 if __name__ == "__main__":

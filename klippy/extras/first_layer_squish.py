@@ -207,12 +207,9 @@ class FirstLayerSquish:
         self.extruder_temp = config.getfloat("extruder_temp", 200., minval=0.)
         self.filament_profiles = {
             "PLA": {"bed_temp": self.bed_temp,
-                    "hotend_temp": self.extruder_temp,
-                    "chamber_temp": 25.},
-            "TPU": {"bed_temp": 50., "hotend_temp": 225.,
-                    "chamber_temp": 30.},
-            "ABS": {"bed_temp": 110., "hotend_temp": 250.,
-                    "chamber_temp": 50.},
+                    "hotend_temp": self.extruder_temp},
+            "TPU": {"bed_temp": 50., "hotend_temp": 225.},
+            "ABS": {"bed_temp": 110., "hotend_temp": 250.},
         }
         self.apply_method = config.getchoice(
             "apply_method", {"auto": "auto", "probe": "probe",
@@ -270,15 +267,12 @@ M109 S{extruder_temp}
         current = self.filament_profiles.get(profile_name, {
             "bed_temp": self.bed_temp,
             "hotend_temp": self.extruder_temp,
-            "chamber_temp": 0.,
         })
         self.filament_profiles[profile_name] = {
             "bed_temp": config.getfloat(
                 "bed_temp", current["bed_temp"], minval=0.),
             "hotend_temp": config.getfloat(
                 "hotend_temp", current["hotend_temp"], minval=0.),
-            "chamber_temp": config.getfloat(
-                "chamber_temp", current["chamber_temp"], minval=0.),
         }
 
     def _require_active(self, gcmd):
@@ -413,8 +407,6 @@ M109 S{extruder_temp}
                 "BED_TEMP", profile["bed_temp"], minval=0.),
             "extruder_temp": hotend_temp,
             "hotend_temp": hotend_temp,
-            "chamber_temp": gcmd.get_float(
-                "CHAMBER_TEMP", profile["chamber_temp"], minval=0.),
             "wipe_length": gcmd.get_float(
                 "WIPE_LENGTH", self.default_wipe_length, minval=0.),
             "wipe_lines": gcmd.get_int(
