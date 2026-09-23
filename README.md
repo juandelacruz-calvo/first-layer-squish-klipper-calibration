@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/first-layer-squish-logo.png" alt="First Layer Squish logo" width="360">
+  <img src="assets/first-layer-squish-logo-horizontal.png" alt="First Layer Squish logo" width="640">
 </p>
 
 # First Layer Squish for Klipper
