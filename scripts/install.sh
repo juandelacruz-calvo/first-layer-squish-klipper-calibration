@@ -16,6 +16,18 @@ fi
 
 ln -sfn "${SOURCE_FILE}" "${TARGET_FILE}"
 echo "Installed first_layer_squish.py at ${TARGET_FILE}"
+
+# Keep the add-on visible to Klipper without marking Klipper's Git checkout
+# dirty or triggering Moonraker's untracked-source warning. This exclude is local to the
+# Klipper checkout and does not modify its tracked files.
+if git -C "${KLIPPER_DIR}" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    EXCLUDE_FILE="$(git -C "${KLIPPER_DIR}" rev-parse --path-format=absolute --git-path info/exclude)"
+    if ! grep -Fxq 'klippy/extras/first_layer_squish.py' "${EXCLUDE_FILE}"; then
+        printf '\n%s\n' 'klippy/extras/first_layer_squish.py' >> "${EXCLUDE_FILE}"
+    fi
+    echo "Excluded the symlink from Klipper's local Git status: ${EXCLUDE_FILE}"
+fi
+
 echo "Copy config/first_layer_squish.cfg into your printer config directory,"
 echo "customize start_gcode, and include it from printer.cfg."
 echo "Then reload Python add-ons with: sudo systemctl restart klipper"

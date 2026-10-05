@@ -45,6 +45,13 @@ Clone this repository beside your other Klipper add-ons and run:
 Alternatively, symlink `klippy/extras/first_layer_squish.py` into
 `~/klipper/klippy/extras/first_layer_squish.py`.
 
+Klipper loads Python add-ons from `klippy/extras`, so the symlink still lives
+inside its checkout. The installer adds `klippy/extras/first_layer_squish.py`
+to Klipper's local `.git/info/exclude` to keep `git status` clean and avoid
+Moonraker's untracked-source warning. This does not change Klipper's tracked
+files or its shared `.gitignore`. If you created the symlink manually, add the
+same line to `~/klipper/.git/info/exclude` yourself.
+
 Copy `config/first_layer_squish.cfg` into the printer configuration directory,
 customize its `start_gcode`, and add this to `printer.cfg`:
 
